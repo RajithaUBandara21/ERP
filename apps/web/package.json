@@ -1,0 +1,42 @@
+{
+  "name": "@erp/web",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Tenant-facing Next.js application — admin/back-office UI and API surface",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "bootstrap:tenant": "tsx scripts/bootstrap-tenant.ts"
+  },
+  "dependencies": {
+    "@erp/auth": "workspace:*",
+    "@erp/authorization": "workspace:*",
+    "@erp/configuration": "workspace:*",
+    "@erp/core": "workspace:*",
+    "@erp/database": "workspace:*",
+    "@erp/identity": "workspace:*",
+    "@erp/logging": "workspace:*",
+    "@erp/module-registry": "workspace:*",
+    "@erp/pos": "workspace:*",
+    "@erp/tenant": "workspace:*",
+    "@erp/validation": "workspace:*",
+    "drizzle-orm": "^0.45.2",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "postgres": "^3.4.9",
+    "tsx": "^4.23.12",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
