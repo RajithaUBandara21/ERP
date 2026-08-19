@@ -1,0 +1,54 @@
+name: erp-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: erp
+      POSTGRES_PASSWORD: erp
+      POSTGRES_DB: erp_control_plane
+    ports:
+      # Host port 5433 to avoid colliding with other local Postgres instances;
+      # .env.example is written to match this.
+      - "5433:5432"
+    volumes:
+      - erp_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U erp -d erp_control_plane"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: erp-dev
+      MINIO_ROOT_PASSWORD: erp-dev-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - erp_minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  erp_postgres_data:
+  erp_minio_data:

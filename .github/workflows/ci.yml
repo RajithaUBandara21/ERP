@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  CONTROL_PLANE_DATABASE_URL: postgres://erp:erp@localhost:5432/erp_control_plane
+  TENANT_DATABASE_ADMIN_URL: postgres://erp:erp@localhost:5432/postgres
+
+jobs:
+  verify:
+    name: Install, typecheck, lint, test, build
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: erp
+          POSTGRES_PASSWORD: erp
+          POSTGRES_DB: erp_control_plane
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U erp -d erp_control_plane"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Migration validation — apply control-plane migrations
+        run: pnpm --filter @erp/database db:migrate
+
+      - name: Unit + integration tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+  # E2E and performance smoke tests, and the container build, are added on
+  # the main branch once apps/web has real user-facing routes to exercise
+  # (Phase 3+) and a Dockerfile exists (Phase 19).
