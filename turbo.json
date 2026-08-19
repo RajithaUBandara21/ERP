@@ -1,0 +1,40 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "env": ["CONTROL_PLANE_DATABASE_URL"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "env": ["CONTROL_PLANE_DATABASE_URL", "TENANT_DATABASE_ADMIN_URL"]
+    },
+    "db:migrate": {
+      "cache": false,
+      "env": ["CONTROL_PLANE_DATABASE_URL"]
+    },
+    "db:generate": {
+      "cache": false,
+      "env": ["CONTROL_PLANE_DATABASE_URL"]
+    },
+    "provision:tenant": {
+      "cache": false,
+      "env": ["CONTROL_PLANE_DATABASE_URL", "TENANT_DATABASE_ADMIN_URL"]
+    },
+    "clean": {
+      "cache": false
+    }
+  }
+}
