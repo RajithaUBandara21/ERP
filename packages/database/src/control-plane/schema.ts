@@ -54,6 +54,13 @@ export const plans = pgTable("plans", {
   ...timestamps,
 }, (table) => [uniqueIndex("plans_code_idx").on(table.code)]);
 
+/**
+ * One row per tenant (uniqueIndex below) — a tenant's subscription is
+ * mutated in place (status transitions, plan changes) rather than
+ * superseded by a new row, the same "single perpetual record" choice as
+ * tenantDatabaseRegistry. See modules/billing's createSubscription for the
+ * idempotent-create use case this enables.
+ */
 export const subscriptions = pgTable("subscriptions", {
   id: uuid("id").primaryKey().defaultRandom(),
   tenantId: uuid("tenant_id").notNull().references(() => tenants.id),
@@ -63,7 +70,7 @@ export const subscriptions = pgTable("subscriptions", {
   currentPeriodStart: timestamp("current_period_start", { withTimezone: true }).notNull().defaultNow(),
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
   ...timestamps,
-});
+}, (table) => [uniqueIndex("subscriptions_tenant_id_idx").on(table.tenantId)]);
 
 /** Per-tenant module activation state — see MODULE-SYSTEM.md §5. */
 export const tenantModules = pgTable("tenant_modules", {

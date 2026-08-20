@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "subscriptions_tenant_id_idx" ON "subscriptions" USING btree ("tenant_id");
