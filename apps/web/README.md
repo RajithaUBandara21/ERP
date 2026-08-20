@@ -2,14 +2,14 @@
 
 The main tenant-facing Next.js application (admin/back-office UI, module UIs, public API surface).
 
-Currently: a minimal App Router skeleton, `/api/health` (control-plane connectivity), `/api/tenant/whoami` (tenant resolution — Phase 3), `/api/auth/{login,logout,me}` (sessions — Phase 4), `/api/identity/users` (permission-gated — Phase 5), `/api/modules` + `/api/modules/[moduleId]/{install,uninstall}` (module registry — Phase 6), and `/api/pos/{terminals,carts,carts/[cartId]/{lines,checkout}}` (POS foundation, opt-in module — Phase 8). No tenant-facing UI yet — see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [ADR-0005](../../docs/adr/0005-nextjs-app-shell.md) for the request-hint/route-handler split this app implements as routes are added.
+Currently: a minimal App Router skeleton, `/api/health` (control-plane connectivity), `/api/tenant/whoami` (tenant resolution — Phase 3), `/api/auth/{login,logout,me}` (sessions — Phase 4), `/api/identity/users` (permission-gated — Phase 5), `/api/modules` + `/api/modules/[moduleId]/{install,uninstall}` (module registry — Phase 6), `/api/pos/{terminals,carts,carts/[cartId]/{lines,checkout}}` (POS foundation, opt-in module — Phase 8), `/api/inventory/{warehouses,stock,stock/receive,stock/adjust}` (Inventory, opt-in module — Phase 9), `/api/payments/attempts/[attemptId]` + `/api/payments/attempts/[attemptId]/refund` (Payments, opt-in module — Phase 10), and `/api/delivery/{drivers,deliveries,deliveries/[deliveryId]/{assign,complete,fail}}` (Delivery, opt-in module — Phase 11). No tenant-facing UI yet — see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [ADR-0005](../../docs/adr/0005-nextjs-app-shell.md) for the request-hint/route-handler split this app implements as routes are added.
 
 - `src/proxy.ts` — hostname hint layer (Next.js 16's renamed "proxy" convention — see [ADR-0005](../../docs/adr/0005-nextjs-app-shell.md)'s Update).
 - `src/lib/with-tenant-context.ts` — resolves tenant from the host; wraps any tenant-scoped route. Generic over Next's dynamic route `params` (see `[moduleId]` routes) since Phase 6 — the first routes needing them.
 - `src/lib/with-auth.ts` — `withTenantContext` + session validation (the cross-tenant check); wraps any authenticated route.
 - `src/lib/with-permission.ts` — `withAuth` + `requirePermission()` (loads the user's role permissions and checks); wraps any permission-gated route.
-- `src/lib/module-registry.ts` — the app's singleton `@erp/module-registry` `ModuleRegistry`, registering `core`, `tenant`, `identity` (Phase 7), and `pos` (Phase 8) manifests.
-- `scripts/bootstrap-tenant.ts` — ops/demo script: provisions a tenant, installs `core` → `tenant` → `identity` **through the registry** (Phase 7 — this is what applies identity's migrations now, not a direct function call), seeds default roles, registers a demo user as **owner**. Does not install `pos` — it's opt-in, install it explicitly via `POST /api/modules/pos/install`.
+- `src/lib/module-registry.ts` — the app's singleton `@erp/module-registry` `ModuleRegistry`, registering `core`, `tenant`, `identity` (Phase 7), `inventory` (Phase 9), `payments` (Phase 10), `delivery` (Phase 11), and `pos` (Phase 8, now depending on both `inventory` and `payments`) manifests.
+- `scripts/bootstrap-tenant.ts` — ops/demo script: provisions a tenant, installs `core` → `tenant` → `identity` **through the registry** (Phase 7 — this is what applies identity's migrations now, not a direct function call), seeds default roles, registers a demo user as **owner**. Does not install `inventory`, `payments`, `delivery`, or `pos` — all four are opt-in; install explicitly via `POST /api/modules/{inventory,payments,delivery,pos}/install` (inventory and payments before pos — pos depends on both; delivery has no dependency on the others).
 
 ```bash
 pnpm --filter @erp/web bootstrap:tenant -- --slug=acme --name="Acme Retail" --email=owner@acme.test --password=supersecret1
@@ -26,8 +26,15 @@ curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/modules 
 curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/core/uninstall
 curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/core/install
 
-# pos is opt-in — must be installed explicitly before its routes work
+# inventory, payments, and pos are all opt-in — pos depends on both inventory and payments, install those first
+curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/inventory/install
+curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/payments/install
 curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/pos/install
+
+curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
+  -d '{"sku":"SKU-1","quantity":10}' -X POST http://localhost:3000/api/inventory/stock/receive
+curl -b cookies.txt -H "Host: acme.localhost" "http://localhost:3000/api/inventory/stock?sku=SKU-1"
+
 curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
   -d '{"name":"Front Counter"}' -X POST http://localhost:3000/api/pos/terminals
 curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
@@ -37,5 +44,26 @@ curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json
   -X POST http://localhost:3000/api/pos/carts/<cart-id>/lines
 curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
   -d '{"idempotencyKey":"POS-TERM-001-20260819-000001","paymentMethod":"cash"}' \
-  -X POST http://localhost:3000/api/pos/carts/<cart-id>/checkout   # retry with the same idempotencyKey returns the same transaction, not a duplicate
+  -X POST http://localhost:3000/api/pos/carts/<cart-id>/checkout   # retry with the same idempotencyKey returns the same transaction, not a duplicate; overselling past received stock returns 422 INVENTORY_INSUFFICIENT_STOCK
+
+# card payments dispatch to SimulatedCardProvider (not a real gateway — see docs/modules/payments.md) — "tok_declined" simulates a decline
+curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
+  -d '{"idempotencyKey":"POS-TERM-001-20260819-000002","paymentMethod":"card","paymentMethodToken":"tok_declined"}' \
+  -X POST http://localhost:3000/api/pos/carts/<cart-id>/checkout   # 402 PAYMENT_FAILED — the stock reservation is automatically released, not left dangling
+
+curl -b cookies.txt -H "Host: acme.localhost" "http://localhost:3000/api/payments/attempts/<attempt-id>"
+curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
+  -d '{"amountCents":1000,"reason":"customer request"}' \
+  -X POST http://localhost:3000/api/payments/attempts/<attempt-id>/refund   # supports partial refunds; a second refund exceeding what remains returns 422
+
+# delivery is opt-in and has no dependency on inventory/payments/pos
+curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/delivery/install
+curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
+  -d '{"name":"Alex"}' -X POST http://localhost:3000/api/delivery/drivers
+curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
+  -d '{"orderReference":"<pos-transaction-id-or-any-reference>"}' -X POST http://localhost:3000/api/delivery/deliveries
+curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
+  -d '{"driverId":"<driver-id>"}' -X POST http://localhost:3000/api/delivery/deliveries/<delivery-id>/assign   # also valid to reassign a different driver while still "assigned"
+curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/delivery/deliveries/<delivery-id>/fail    # not terminal — assignable again afterward
+curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/delivery/deliveries/<delivery-id>/complete
 ```

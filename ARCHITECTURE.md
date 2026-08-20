@@ -123,10 +123,10 @@ Full detail and exit criteria are in the approved plan. Sequence (CLAUDE.md §54
 6. Module registry            ✓ done — packages/module-registry, modules/core, apps/web /api/modules
 7. Module installation         ✓ done — tenant/identity retrofitted with real manifests; identity's migrations now run via the manifest's applyMigrations hook, not a direct call (see apps/web/tests/module-installation-retrofit.integration.test.ts). Remaining scope (wire permission/route/config/event registration) deferred until those systems exist — see MODULE-SYSTEM.md §3.
 8. POS foundation             ✓ done — modules/pos (terminals, carts, idempotent checkout via PosTransaction); depends only on core/tenant/identity, not sales/inventory/payments (none exist yet) — stock deduction and payment capture are stubbed behind StockReservationPort/PaymentCapturePort (no-op/always-succeeds implementations), to be replaced when Phases 9–10 land. Opt-in, not auto-installed by bootstrap-tenant.ts. i18n remains plan-only (ADR-0011) — no UI exists yet to localize.
-9. Inventory              ← current phase
-10. Payments
-11. Delivery
-12. Offline POS
+9. Inventory              ✓ done — modules/inventory (warehouses, ledger-backed stock levels, reserve/confirm/release lifecycle per CLAUDE.md §21); pos retrofitted with a real StockReservationPort and now depends on inventory. Discovered and fixed a real bug: drizzle's default migrator tracks "already applied" via a single cross-module timestamp watermark, so a module's migrations could get silently skipped depending on install order vs. generation order — fixed by giving every module its own migrations tracking table (see packages/database/src/tenant/migrate.ts).
+10. Payments              ✓ done — modules/payments (PaymentAttempt/Refund ledger, CashProvider [real], SimulatedCardProvider [documented stand-in, no real gateway integration], idempotent capture, concurrency-safe partial/full refund via row-locking). pos retrofitted with a real PaymentsCapturePort; checkout() now threads a `paymentMethodToken` through for tokenized providers. Live-verified: cash checkout, card decline (with automatic stock-reservation release), card success, GET/refund via /api/payments/attempts/*, idempotent retry.
+11. Delivery              ✓ done — modules/delivery (Driver, Delivery, and an append-only DeliveryAssignment audit ledger). No `sales` module exists (and it isn't one of this list's 19 scheduled phases), so Delivery.orderReference is an opaque string rather than a foreign key — depends only on core/tenant/identity. State machine: pending → assigned (→ reassign mid-flight, or → completed) with a fail → retry path (CLAUDE.md §34), all live-verified.
+12. Offline POS           ← current phase
 13. Events/outbox
 14. Reporting
 15. SaaS billing

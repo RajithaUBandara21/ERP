@@ -2,7 +2,7 @@
 
 A production-grade, multi-tenant ERP SaaS platform built as a modular monolith with future service-extraction capability.
 
-This repository has completed **Phase 8 (POS Foundation)**: `modules/pos` implements terminals, carts, and an idempotent checkout flow (`PosTransaction`), permission-gated behind `apps/web`'s `/api/pos/*` routes. POS is an opt-in module — depending only on `core`/`tenant`/`identity`, not the not-yet-built `sales`/`inventory`/`payments` — with stock deduction and payment capture behind stubbed `StockReservationPort`/`PaymentCapturePort` interfaces, to be wired to real implementations once Phases 9–10 land (see [docs/modules/pos.md](./docs/modules/pos.md)). Proven live end-to-end via curl against a running `next dev` server: install pos → register terminal → create cart → add line → checkout → idempotent retry. See [CLAUDE.md](./CLAUDE.md) for the full governing specification and [docs/adr/](./docs/adr/) for the architecture decisions made so far.
+This repository has completed **Phase 11 (Delivery)**: `modules/delivery` implements `Driver`, `Delivery`, and an append-only `DeliveryAssignment` audit ledger, with a state machine covering first assignment, mid-flight reassignment, a fail → retry → reassign path (CLAUDE.md §34), and completion. No `sales` module exists in this codebase (it isn't one of CLAUDE.md §54's 19 scheduled phases), so `Delivery.orderReference` is an opaque string, not a foreign key — `delivery` depends only on `core`/`tenant`/`identity`. Proven live end-to-end via curl: register drivers → create a delivery → assign → mid-flight reassign → mark failed → reassign (retry) → complete → confirm further reassignment is correctly rejected. See [docs/modules/delivery.md](./docs/modules/delivery.md), and [docs/modules/payments.md](./docs/modules/payments.md)/[docs/modules/inventory.md](./docs/modules/inventory.md) for Phases 9–10 (ledger-backed stock, idempotent payment capture and refund, and the cross-module migration-tracking bug found and fixed in Phase 9). See [CLAUDE.md](./CLAUDE.md) for the full governing specification and [docs/adr/](./docs/adr/) for the architecture decisions made so far.
 
 ## Start here
 
@@ -73,7 +73,7 @@ curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/identity
 curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/modules
 ```
 
-See the roadmap in [ARCHITECTURE.md](./ARCHITECTURE.md#9-implementation-roadmap) for what's next (Phase 9, Inventory).
+See the roadmap in [ARCHITECTURE.md](./ARCHITECTURE.md#9-implementation-roadmap) for what's next (Phase 12, Offline POS).
 
 ## Development principles
 
