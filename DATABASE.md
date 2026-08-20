@@ -18,7 +18,7 @@ Never mix control-plane and tenant-plane tables in the same database. The contro
 |---|---|
 | `tenants` | Tenant identity, slug, status |
 | `tenant_database_registry` | Per-tenant connection string/credentials reference, physical placement metadata |
-| `subscriptions` | Tenant's active subscription |
+| `subscriptions` | Tenant's active subscription — one row per tenant (unique index on `tenant_id`, added Phase 15 alongside `modules/billing`) |
 | `plans` | Available subscription plans and included modules/limits |
 | `tenant_modules` | Per-tenant module activation state (ACTIVE/DISABLED) |
 | `module_versions` | Installed module version per tenant |

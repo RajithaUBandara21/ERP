@@ -2,15 +2,15 @@
 
 The main tenant-facing Next.js application (admin/back-office UI, module UIs, public API surface).
 
-Currently: a minimal App Router skeleton, `/api/health` (control-plane connectivity), `/api/tenant/whoami` (tenant resolution — Phase 3), `/api/auth/{login,logout,me}` (sessions — Phase 4), `/api/identity/users` (permission-gated — Phase 5), `/api/modules` + `/api/modules/[moduleId]/{install,uninstall}` (module registry — Phase 6), `/api/pos/{terminals,carts,carts/[cartId]/{lines,checkout}}` (POS foundation, opt-in module — Phase 8), `/api/inventory/{warehouses,stock,stock/receive,stock/adjust}` (Inventory, opt-in module — Phase 9), `/api/payments/attempts/[attemptId]` + `/api/payments/attempts/[attemptId]/refund` (Payments, opt-in module — Phase 10), `/api/delivery/{drivers,deliveries,deliveries/[deliveryId]/{assign,complete,fail}}` (Delivery, opt-in module — Phase 11), `/api/events/publish` (manually drains the outbox — Phase 13, no background scheduler exists yet), and `/api/reporting/sales-summary` (Reporting, opt-in module — Phase 14, cursor-paginated). No tenant-facing UI yet — see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [ADR-0005](../../docs/adr/0005-nextjs-app-shell.md) for the request-hint/route-handler split this app implements as routes are added.
+Currently: a minimal App Router skeleton, `/api/health` (control-plane connectivity), `/api/tenant/whoami` (tenant resolution — Phase 3), `/api/auth/{login,logout,me}` (sessions — Phase 4), `/api/identity/users` (permission-gated — Phase 5), `/api/modules` + `/api/modules/[moduleId]/{install,uninstall}` (module registry — Phase 6, entitlement-gated as of Phase 15), `/api/pos/{terminals,carts,carts/[cartId]/{lines,checkout}}` (POS foundation, opt-in module — Phase 8), `/api/inventory/{warehouses,stock,stock/receive,stock/adjust}` (Inventory, opt-in module — Phase 9), `/api/payments/attempts/[attemptId]` + `/api/payments/attempts/[attemptId]/refund` (Payments, opt-in module — Phase 10), `/api/delivery/{drivers,deliveries,deliveries/[deliveryId]/{assign,complete,fail}}` (Delivery, opt-in module — Phase 11), `/api/events/publish` (manually drains the outbox — Phase 13, no background scheduler exists yet), `/api/reporting/sales-summary` (Reporting, opt-in module — Phase 14, cursor-paginated), and `/api/billing/{subscription,charge}` (Billing, always-installed — Phase 15). No tenant-facing UI yet — see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [ADR-0005](../../docs/adr/0005-nextjs-app-shell.md) for the request-hint/route-handler split this app implements as routes are added.
 
 - `src/proxy.ts` — hostname hint layer (Next.js 16's renamed "proxy" convention — see [ADR-0005](../../docs/adr/0005-nextjs-app-shell.md)'s Update).
 - `src/lib/with-tenant-context.ts` — resolves tenant from the host; wraps any tenant-scoped route. Generic over Next's dynamic route `params` (see `[moduleId]` routes) since Phase 6 — the first routes needing them.
 - `src/lib/with-auth.ts` — `withTenantContext` + session validation (the cross-tenant check); wraps any authenticated route.
 - `src/lib/with-permission.ts` — `withAuth` + `requirePermission()` (loads the user's role permissions and checks); wraps any permission-gated route.
-- `src/lib/module-registry.ts` — the app's singleton `@erp/module-registry` `ModuleRegistry`, registering `core`, `tenant`, `identity` (Phase 7), `inventory` (Phase 9), `payments` (Phase 10), `delivery` (Phase 11), `reporting` (Phase 14), and `pos` (Phase 8, now depending on both `inventory` and `payments`) manifests.
+- `src/lib/module-registry.ts` — the app's singleton `@erp/module-registry` `ModuleRegistry`, registering `core`, `tenant`, `identity`, `billing` (Phase 15), `inventory` (Phase 9), `payments` (Phase 10), `delivery` (Phase 11), `reporting` (Phase 14), and `pos` (Phase 8, now depending on both `inventory` and `payments`) manifests.
 - `src/lib/event-consumers.ts` — the app's registered `@erp/events` `EventConsumer`s: delivery's `OrderPaid` handler (Phase 13) and reporting's `OrderPaid` handler (Phase 14) — both react to the same event independently.
-- `scripts/bootstrap-tenant.ts` — ops/demo script: provisions a tenant, installs `core` → `tenant` → `identity` **through the registry** (Phase 7 — this is what applies identity's migrations now, not a direct function call), seeds default roles, registers a demo user as **owner**. Does not install `inventory`, `payments`, `delivery`, `reporting`, or `pos` — all five are opt-in; install explicitly via `POST /api/modules/{inventory,payments,delivery,reporting,pos}/install` (inventory and payments before pos — pos depends on both; delivery and reporting have no dependency on the others).
+- `scripts/bootstrap-tenant.ts` — ops/demo script: provisions a tenant, installs `core` → `tenant` → `identity` → `billing` **through the registry** (Phase 7 — this is what applies identity's migrations now, not a direct function call), subscribes the tenant to the `starter` plan (Phase 15), seeds default roles, registers a demo user as **owner**. Does not install `inventory`, `payments`, `delivery`, `reporting`, or `pos` — all five are opt-in; install explicitly via `POST /api/modules/{inventory,payments,delivery,reporting,pos}/install`, now entitlement-gated by the tenant's subscribed plan (inventory/payments/pos are in `starter`; `delivery`/`reporting` require `growth` — see `modules/billing/src/application/seed-default-plans.ts`).
 
 ```bash
 pnpm --filter @erp/web bootstrap:tenant -- --slug=acme --name="Acme Retail" --email=owner@acme.test --password=supersecret1
@@ -23,9 +23,13 @@ curl -c cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json
 curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/auth/me
 curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/identity/users   # owner → 200; no session → 401; a member-role session → 403
 
-curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/modules          # core, tenant, identity all active (bootstrap installs them)
+curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/modules          # core, tenant, identity, billing all active (bootstrap installs them)
 curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/core/uninstall
 curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/core/install
+
+# bootstrap already subscribed this tenant to "starter" — every module install below is entitlement-gated against it
+curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/billing/subscription   # {"subscription":{...,"status":"trialing"},"plan":{"code":"starter","includedModules":["core","tenant","identity","pos","inventory","payments"],...}}
+curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/billing/charge   # manual trigger, no billing-cycle scheduler yet — {"status":"paid","amountCents":4900,...} via the stub gateway
 
 # inventory, payments, and pos are all opt-in — pos depends on both inventory and payments, install those first
 curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/inventory/install
@@ -57,7 +61,10 @@ curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json
   -d '{"amountCents":1000,"reason":"customer request"}' \
   -X POST http://localhost:3000/api/payments/attempts/<attempt-id>/refund   # supports partial refunds; a second refund exceeding what remains returns 422
 
-# delivery is opt-in and has no dependency on inventory/payments/pos
+# delivery and reporting require the "growth" plan (not "starter", which bootstrap subscribes new tenants to) —
+# without upgrading the subscription first, this returns 402 MODULE_NOT_ENTITLED; there is no self-serve
+# upgrade endpoint yet (see docs/modules/billing.md), so demoing this end to end means creating a "growth"
+# subscription directly via modules/billing's createSubscription, the same way the tests below do.
 curl -b cookies.txt -H "Host: acme.localhost" -X POST http://localhost:3000/api/modules/delivery/install
 curl -b cookies.txt -H "Host: acme.localhost" -H "Content-Type: application/json" \
   -d '{"name":"Alex"}' -X POST http://localhost:3000/api/delivery/drivers
