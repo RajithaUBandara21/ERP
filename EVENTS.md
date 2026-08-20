@@ -1,6 +1,6 @@
 # Events
 
-Status: Implemented, Phase 13 (see [ADR-0004](./docs/adr/0004-outbox-pattern.md)'s Update for exactly what shipped, and [packages/events/README.md](./packages/events/README.md) for usage).
+Status: Implemented, Phase 13 (see [ADR-0004](./docs/adr/0004-outbox-pattern.md)'s Update for exactly what shipped, and [packages/events/README.md](./packages/events/README.md) for usage). Phase 14 added `reporting` as a second, independent consumer of `OrderPaid` (see §6) — proof that the outbox fans one event out to multiple modules without either consumer knowing about the other.
 
 ## 1. Why events
 
@@ -64,6 +64,7 @@ POS completes a sale
  → outbox publisher delivers OrderPaid
  → accounting module (consumer): idempotently creates a ledger entry
  → delivery module (consumer, if applicable): idempotently creates a pending Delivery
+ → reporting module (consumer): idempotently increments its SalesDailySummary read model (Phase 14 — see docs/modules/reporting.md)
 ```
 
 Everything required for the sale itself to succeed is synchronous within one transaction boundary; everything that is a *downstream reaction* to the completed sale is asynchronous via the outbox. This is the transaction-boundary pattern referenced in CLAUDE.md §22: `transactional database operations + idempotency + outbox + compensating actions` for cross-module workflows, with compensating actions defined per-workflow where a downstream reaction can itself fail (e.g. delivery creation failing does not roll back the sale — it is retried/alerted instead).
