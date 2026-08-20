@@ -9,6 +9,10 @@
  * referencing the paid transaction. Also proves per-consumer delivery
  * dedup: publishing twice never creates a second Delivery for the same
  * transaction.
+ *
+ * Phase 14 extends this same flagship test: reporting's consumer reacts to
+ * the identical OrderPaid event independently of delivery's, so the sale
+ * must also show up in GET /api/reporting/sales-summary once published.
  */
 import postgres from "postgres";
 import { NextRequest } from "next/server";
@@ -20,6 +24,7 @@ import { inventoryManifest } from "@erp/inventory";
 import { paymentsManifest } from "@erp/payments";
 import { deliveryManifest, DrizzleDeliveryRepository } from "@erp/delivery";
 import { posManifest } from "@erp/pos";
+import { reportingManifest } from "@erp/reporting";
 import { coreManifest, DrizzleModuleRegistryRepository, installModule } from "@erp/core";
 import { ModuleRegistry } from "@erp/module-registry";
 
@@ -69,6 +74,7 @@ describe.skipIf(!hasDatabases)("events flow (integration)", () => {
     registry.register(paymentsManifest);
     registry.register(deliveryManifest);
     registry.register(posManifest);
+    registry.register(reportingManifest);
     registry.validateGraph();
 
     const moduleRepository = new DrizzleModuleRegistryRepository();
@@ -79,6 +85,7 @@ describe.skipIf(!hasDatabases)("events flow (integration)", () => {
     await installModule(registry, moduleRepository, tenant.id, "payments", null);
     await installModule(registry, moduleRepository, tenant.id, "delivery", null);
     await installModule(registry, moduleRepository, tenant.id, "pos", null);
+    await installModule(registry, moduleRepository, tenant.id, "reporting", null);
 
     const db = await getTenantDb(tenant.id);
     const { owner } = await seedDefaultRoles(new DrizzleRoleRepository(), db);
@@ -147,5 +154,15 @@ describe.skipIf(!hasDatabases)("events flow (integration)", () => {
     const afterSecondPublish = await deliveryRepository.list(db);
     const matches = afterSecondPublish.filter((d) => d.orderReference === transaction.id);
     expect(matches).toHaveLength(1);
+
+    // Reporting's consumer reacted to the same event independently — the sale shows up in the sales summary too.
+    const { GET: getSalesSummary } = await import("../src/app/api/reporting/sales-summary/route");
+    const summaryResponse = await getSalesSummary(new NextRequest(`http://${host}/api/reporting/sales-summary`, {
+      headers: new Headers({ host, "x-tenant-host-hint": host, cookie: `erp_session=${token}` }),
+    }));
+    expect(summaryResponse.status).toBe(200);
+    const summary = await summaryResponse.json();
+    const totalCents = (summary.items as { totalCents: number }[]).reduce((sum, row) => sum + row.totalCents, 0);
+    expect(totalCents).toBeGreaterThanOrEqual(transaction.totalCents);
   });
 });
