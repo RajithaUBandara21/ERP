@@ -31,5 +31,7 @@ export { completeDelivery } from "./application/complete-delivery";
 
 export { DeliveryNotFailableError, failDelivery } from "./application/fail-delivery";
 
+export { createOrderPaidConsumer } from "./application/order-paid-consumer";
+
 export { applyDeliveryMigrations } from "./apply-migrations";
 export { deliveryManifest } from "./module.manifest";
