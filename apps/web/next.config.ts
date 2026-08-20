@@ -20,6 +20,7 @@ const nextConfig: NextConfig = {
     "@erp/pos",
     "@erp/delivery",
     "@erp/events",
+    "@erp/reporting",
   ],
   // Avoid Next auto-generating its own AGENTS.md/CLAUDE.md here — the
   // repository already has a governing root CLAUDE.md (see ARCHITECTURE.md).

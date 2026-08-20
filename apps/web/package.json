@@ -27,6 +27,7 @@
     "@erp/module-registry": "workspace:*",
     "@erp/payments": "workspace:*",
     "@erp/pos": "workspace:*",
+    "@erp/reporting": "workspace:*",
     "@erp/tenant": "workspace:*",
     "@erp/validation": "workspace:*",
     "drizzle-orm": "^0.45.2",
