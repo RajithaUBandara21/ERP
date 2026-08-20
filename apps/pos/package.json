@@ -1,0 +1,33 @@
+{
+  "name": "@erp/pos-terminal",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Offline-first POS terminal application (see OFFLINE-POS.md and docs/adr/0003-offline-pos.md)",
+  "type": "module",
+  "scripts": {
+    "dev": "next dev -p 3001",
+    "build": "next build",
+    "start": "next start -p 3001",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@erp/validation": "workspace:*",
+    "idb": "^8.0.3",
+    "next": "^16.3.1",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.16",
+    "@types/node": "^26.2.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
+    "fake-indexeddb": "^6.2.2",
+    "jsdom": "^25.0.1",
+    "tailwindcss": "^4.1.16",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
