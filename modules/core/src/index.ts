@@ -1,4 +1,5 @@
 export { coreManifest } from "./module.manifest";
+export { applyCoreMigrations } from "./apply-migrations";
 export { CORE_PERMISSIONS } from "./domain/permissions";
 export type { CorePermission } from "./domain/permissions";
 

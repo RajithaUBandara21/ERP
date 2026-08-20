@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@erp/database": "workspace:*",
+    "@erp/events": "workspace:*",
     "@erp/logging": "workspace:*",
     "@erp/module-registry": "workspace:*",
     "drizzle-orm": "^0.45.2"
