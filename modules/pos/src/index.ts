@@ -24,9 +24,11 @@ export { DrizzlePosTransactionRepository } from "./infrastructure/drizzle-pos-tr
 
 export type { StockReservationPort } from "./application/stock-reservation-port";
 export { NoopStockReservationPort } from "./infrastructure/noop-stock-reservation-port";
+export { InventoryStockReservationPort } from "./infrastructure/inventory-stock-reservation-port";
 
 export type { PaymentCaptureResult, PaymentCapturePort } from "./application/payment-capture-port";
 export { AlwaysSucceedsPaymentCapturePort } from "./infrastructure/always-succeeds-payment-capture-port";
+export { PaymentsCapturePort } from "./infrastructure/payments-capture-port";
 
 export { registerTerminal } from "./application/register-terminal";
 export type { RegisterTerminalInput } from "./application/register-terminal";

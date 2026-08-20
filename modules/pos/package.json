@@ -14,7 +14,9 @@
   },
   "dependencies": {
     "@erp/database": "workspace:*",
+    "@erp/inventory": "workspace:*",
     "@erp/module-registry": "workspace:*",
+    "@erp/payments": "workspace:*",
     "@erp/validation": "workspace:*",
     "drizzle-orm": "^0.45.2"
   },

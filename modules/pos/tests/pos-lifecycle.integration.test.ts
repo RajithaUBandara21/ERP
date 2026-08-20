@@ -10,6 +10,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeControlPlaneDb, getTenantDb } from "@erp/database";
 import { createTenant, DrizzleTenantRepository, provisionTenantDatabase, tenantManifest } from "@erp/tenant";
 import { identityManifest } from "@erp/identity";
+import { inventoryManifest } from "@erp/inventory";
+import { paymentsManifest } from "@erp/payments";
 import { coreManifest, DrizzleModuleRegistryRepository, installModule } from "@erp/core";
 import { ModuleRegistry } from "@erp/module-registry";
 import { addCartLine } from "../src/application/add-cart-line";
@@ -40,6 +42,8 @@ describe.skipIf(!hasDatabases)("pos lifecycle (integration)", () => {
     registry.register(coreManifest);
     registry.register(tenantManifest);
     registry.register(identityManifest);
+    registry.register(inventoryManifest);
+    registry.register(paymentsManifest);
     registry.register(posManifest);
     registry.validateGraph();
 
@@ -47,6 +51,8 @@ describe.skipIf(!hasDatabases)("pos lifecycle (integration)", () => {
     await installModule(registry, moduleRepo, tenantId, "core", null);
     await installModule(registry, moduleRepo, tenantId, "tenant", null);
     await installModule(registry, moduleRepo, tenantId, "identity", null);
+    await installModule(registry, moduleRepo, tenantId, "inventory", null);
+    await installModule(registry, moduleRepo, tenantId, "payments", null);
     await installModule(registry, moduleRepo, tenantId, "pos", null); // proves applyPosMigrations really runs
   });
 

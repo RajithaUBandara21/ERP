@@ -26,6 +26,8 @@ export interface CheckoutInput {
   cartId: string;
   idempotencyKey: string;
   paymentMethod: string;
+  /** Opaque, already-tokenized reference — never raw card data (CLAUDE.md §33). Required by some providers (e.g. "card"), ignored by others (e.g. "cash"). */
+  paymentMethodToken?: string;
   /** No tax engine exists yet — defaults to 0; a caller (or a future tax module) can pass a computed value. */
   taxCents?: number;
 }
@@ -33,12 +35,12 @@ export interface CheckoutInput {
 /**
  * CLAUDE.md §22's "transactional database operations + idempotency +
  * outbox + compensating actions" for cross-module workflows. Idempotency
- * and the DB write are implemented. Compensating actions are NOT yet: with
- * the current no-op ports (see stock-reservation-port.ts,
- * payment-capture-port.ts) there's nothing to compensate, but once Phase 9/10
- * wire real implementations, a reserveStock() that succeeds followed by a
- * capturePayment() that fails needs an explicit stock-release compensating
- * call here — tracked as a known gap, not silently forgotten.
+ * and the DB write are implemented. The compensating action flagged as a
+ * gap in Phase 8 (a reserveStock() that succeeds followed by a
+ * capturePayment() that fails needs an explicit stock-release) is closed
+ * now that Phase 9 wires a real StockReservationPort: on payment failure
+ * this releases the reservation before rethrowing; on success it confirms
+ * the reservation into an actual deduction.
  */
 export async function checkout(
   dependencies: CheckoutDependencies,
@@ -62,12 +64,22 @@ export async function checkout(
   const taxCents = input.taxCents ?? 0;
   const totalCents = subtotalCents + taxCents;
 
-  await dependencies.stockReservationPort.reserveStock(tenantId, cart.lines);
+  await dependencies.stockReservationPort.reserveStock(tenantId, cart.id, cart.lines);
 
-  const paymentResult = await dependencies.paymentCapturePort.capturePayment(tenantId, totalCents, input.paymentMethod);
+  const paymentResult = await dependencies.paymentCapturePort.capturePayment(
+    tenantId,
+    idempotencyKey,
+    totalCents,
+    input.paymentMethod,
+    input.paymentMethodToken,
+  );
   if (!paymentResult.success) {
+    // Compensating action: undo the reservation before surfacing the failure.
+    await dependencies.stockReservationPort.releaseReservation(tenantId, cart.id, cart.lines);
     throw new PaymentCaptureFailedError();
   }
+
+  await dependencies.stockReservationPort.confirmReservation(tenantId, cart.id, cart.lines);
 
   const transaction = await dependencies.transactionRepository.create(db, {
     terminalId: cart.terminalId,

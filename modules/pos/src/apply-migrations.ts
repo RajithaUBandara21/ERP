@@ -16,5 +16,5 @@ import { runTenantMigrations } from "@erp/database";
 export async function applyPosMigrations(tenantId: string): Promise<void> {
   const currentDir = path.dirname(fileURLToPath(import.meta.url));
   const migrationsFolder = path.join(currentDir, "..", "migrations");
-  await runTenantMigrations(tenantId, migrationsFolder);
+  await runTenantMigrations(tenantId, migrationsFolder, "__drizzle_migrations_pos");
 }

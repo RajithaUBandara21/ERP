@@ -3,9 +3,9 @@ import { posManifest } from "../src/module.manifest";
 import { POS_PERMISSIONS } from "../src/domain/permissions";
 
 describe("posManifest", () => {
-  it("depends on core, tenant, and identity (sales/inventory/payments omitted — see doc comment)", () => {
+  it("depends on core, tenant, identity, inventory, and payments (sales omitted — see doc comment)", () => {
     const dependencyIds = posManifest.dependencies.map((d) => d.moduleId).sort();
-    expect(dependencyIds).toEqual(["core", "identity", "tenant"]);
+    expect(dependencyIds).toEqual(["core", "identity", "inventory", "payments", "tenant"]);
   });
 
   it("declares its permission catalog", () => {

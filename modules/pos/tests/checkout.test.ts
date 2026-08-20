@@ -39,8 +39,11 @@ describe("checkout", () => {
     expect(transaction.totalCents).toBe(1000);
     expect(transaction.status).toBe("completed");
 
-    expect(d.stockReservationPort.calls).toHaveLength(1);
-    expect(d.paymentCapturePort.calls).toEqual([{ tenantId: "tenant-1", amountCents: 1000, method: "cash" }]);
+    expect(d.stockReservationPort.reserveCalls).toHaveLength(1);
+    expect(d.stockReservationPort.confirmCalls).toHaveLength(1);
+    expect(d.stockReservationPort.releaseCalls).toHaveLength(0);
+    expect(d.stockReservationPort.reserveCalls[0]?.reference).toBe(cart.id);
+    expect(d.paymentCapturePort.calls).toEqual([{ tenantId: "tenant-1", idempotencyKey: VALID_KEY, amountCents: 1000, method: "cash" }]);
 
     const closedCart = await d.cartRepository.findById(fakeDb, cart.id);
     expect(closedCart?.status).toBe("completed");
@@ -84,7 +87,7 @@ describe("checkout", () => {
 
     expect(second.id).toBe(first.id);
     // Side effects (stock reservation, payment capture) must not repeat on retry.
-    expect(d.stockReservationPort.calls).toHaveLength(1);
+    expect(d.stockReservationPort.reserveCalls).toHaveLength(1);
     expect(d.paymentCapturePort.calls).toHaveLength(1);
   });
 
@@ -95,7 +98,7 @@ describe("checkout", () => {
     await expect(
       checkout(d, fakeDb, "tenant-1", { cartId: cart.id, idempotencyKey: VALID_KEY, paymentMethod: "cash" }),
     ).rejects.toThrow(EmptyCartError);
-    expect(d.stockReservationPort.calls).toHaveLength(0);
+    expect(d.stockReservationPort.reserveCalls).toHaveLength(0);
   });
 
   it("rejects checkout on an already-completed cart", async () => {
@@ -124,10 +127,10 @@ describe("checkout", () => {
     await expect(
       checkout(d, fakeDb, "tenant-1", { cartId: cart.id, idempotencyKey: "not-a-valid-key", paymentMethod: "cash" }),
     ).rejects.toThrow();
-    expect(d.stockReservationPort.calls).toHaveLength(0);
+    expect(d.stockReservationPort.reserveCalls).toHaveLength(0);
   });
 
-  it("throws PaymentCaptureFailedError when the payment port declines, and does not record a transaction", async () => {
+  it("throws PaymentCaptureFailedError when the payment port declines, releases the reservation, and does not record a transaction", async () => {
     const cartRepository = new FakeCartRepository();
     const transactionRepository = new FakePosTransactionRepository();
     const stockReservationPort = new FakeStockReservationPort();
@@ -152,5 +155,11 @@ describe("checkout", () => {
     expect(recorded).toBeUndefined();
     const cartAfter = await cartRepository.findById(fakeDb, cart.id);
     expect(cartAfter?.status).toBe("open"); // never closed on a failed payment
+
+    // The compensating action: reserved stock is released, never confirmed, on payment failure.
+    expect(stockReservationPort.reserveCalls).toHaveLength(1);
+    expect(stockReservationPort.releaseCalls).toHaveLength(1);
+    expect(stockReservationPort.confirmCalls).toHaveLength(0);
+    expect(stockReservationPort.releaseCalls[0]?.reference).toBe(cart.id);
   });
 });

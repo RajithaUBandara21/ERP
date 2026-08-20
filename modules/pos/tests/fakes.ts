@@ -83,19 +83,29 @@ export class FakePosTransactionRepository implements PosTransactionRepository {
 }
 
 export class FakeStockReservationPort implements StockReservationPort {
-  public calls: { tenantId: string; lines: CartLine[] }[] = [];
+  public reserveCalls: { tenantId: string; reference: string; lines: CartLine[] }[] = [];
+  public confirmCalls: { tenantId: string; reference: string; lines: CartLine[] }[] = [];
+  public releaseCalls: { tenantId: string; reference: string; lines: CartLine[] }[] = [];
 
-  async reserveStock(tenantId: string, lines: CartLine[]): Promise<void> {
-    this.calls.push({ tenantId, lines });
+  async reserveStock(tenantId: string, reference: string, lines: CartLine[]): Promise<void> {
+    this.reserveCalls.push({ tenantId, reference, lines });
+  }
+
+  async confirmReservation(tenantId: string, reference: string, lines: CartLine[]): Promise<void> {
+    this.confirmCalls.push({ tenantId, reference, lines });
+  }
+
+  async releaseReservation(tenantId: string, reference: string, lines: CartLine[]): Promise<void> {
+    this.releaseCalls.push({ tenantId, reference, lines });
   }
 }
 
 export class FakePaymentCapturePort implements PaymentCapturePort {
-  public calls: { tenantId: string; amountCents: number; method: string }[] = [];
+  public calls: { tenantId: string; idempotencyKey: string; amountCents: number; method: string }[] = [];
   constructor(private readonly result: PaymentCaptureResult = { success: true }) {}
 
-  async capturePayment(tenantId: string, amountCents: number, method: string): Promise<PaymentCaptureResult> {
-    this.calls.push({ tenantId, amountCents, method });
+  async capturePayment(tenantId: string, idempotencyKey: string, amountCents: number, method: string): Promise<PaymentCaptureResult> {
+    this.calls.push({ tenantId, idempotencyKey, amountCents, method });
     return this.result;
   }
 }
