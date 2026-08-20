@@ -1,0 +1,27 @@
+{
+  "name": "@erp/events",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Domain event envelope, transactional outbox, and outbox publisher (see EVENTS.md and ADR-0004)",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@erp/database": "workspace:*",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "@erp/tenant": "workspace:*",
+    "@types/node": "^26.2.0",
+    "drizzle-kit": "^0.31.10",
+    "postgres": "^3.4.9",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11"
+  }
+}
