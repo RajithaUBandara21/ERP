@@ -14,11 +14,29 @@ import { eq } from "drizzle-orm";
  * installation steps" (MODULE-SYSTEM.md §3); until then, callers (module
  * bootstrap code, e.g. modules/identity) invoke this directly per module.
  *
+ * `migrationsTable` MUST be unique per module (e.g.
+ * "__drizzle_migrations_identity") — see Phase 9's discovery: drizzle's
+ * migrator tracks "already applied" by comparing each local journal entry's
+ * generation timestamp against the single highest timestamp recorded in
+ * the tracking table, not by folder identity. With every module sharing
+ * drizzle's default "__drizzle_migrations" table, a module whose migration
+ * file happened to be *generated* (via `drizzle-kit generate`) earlier
+ * than another module's — regardless of install order — got silently
+ * skipped as "already applied" the moment it ran after that other module,
+ * because its journal timestamp was older than the shared watermark.
+ * Concretely: identity's migrations were generated in Phase 4/5, pos's in
+ * Phase 8, inventory's in Phase 9 — so once Phase 9 wired POS to depend on
+ * (and install after) inventory, `applyPosMigrations` silently did
+ * nothing, and POS's tables never got created, because pos's Phase-8
+ * timestamp was older than inventory's Phase-9 one. A per-module tracking
+ * table removes the shared watermark entirely, so each module's install
+ * order and generation timestamp are independent of every other module's.
+ *
  * Uses a short-lived connection, not the shared tenant connection registry —
  * migrations are an infrequent administrative operation, not request-path
  * traffic.
  */
-export async function runTenantMigrations(tenantId: string, migrationsFolder: string): Promise<void> {
+export async function runTenantMigrations(tenantId: string, migrationsFolder: string, migrationsTable: string): Promise<void> {
   const controlPlaneDb = getControlPlaneDb();
   const [registration] = await controlPlaneDb
     .select({ connectionString: schema.tenantDatabaseRegistry.connectionString })
@@ -33,7 +51,7 @@ export async function runTenantMigrations(tenantId: string, migrationsFolder: st
   const sql = postgres(registration.connectionString, { max: 1 });
   try {
     const db = drizzle(sql);
-    await migrate(db, { migrationsFolder });
+    await migrate(db, { migrationsFolder, migrationsTable });
   } finally {
     await sql.end();
   }
