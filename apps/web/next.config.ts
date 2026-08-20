@@ -15,6 +15,8 @@ const nextConfig: NextConfig = {
     "@erp/identity",
     "@erp/module-registry",
     "@erp/core",
+    "@erp/inventory",
+    "@erp/payments",
     "@erp/pos",
   ],
   // Avoid Next auto-generating its own AGENTS.md/CLAUDE.md here — the

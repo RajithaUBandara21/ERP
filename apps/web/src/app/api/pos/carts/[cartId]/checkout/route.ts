@@ -1,15 +1,17 @@
 import {
-  AlwaysSucceedsPaymentCapturePort,
   CartNotFoundError,
   CartNotOpenError,
   checkout,
   DrizzleCartRepository,
   DrizzlePosTransactionRepository,
   EmptyCartError,
-  NoopStockReservationPort,
+  InventoryStockReservationPort,
   PaymentCaptureFailedError,
+  PaymentsCapturePort,
   POS_PERMISSIONS,
 } from "@erp/pos";
+import { InsufficientStockError } from "@erp/inventory";
+import { UnsupportedPaymentMethodError } from "@erp/payments";
 import { createLogger } from "@erp/logging";
 import { stripUndefined, z } from "@erp/validation";
 import { NextResponse } from "next/server";
@@ -17,15 +19,17 @@ import { withPermission } from "@/lib/with-permission";
 
 const cartRepository = new DrizzleCartRepository();
 const transactionRepository = new DrizzlePosTransactionRepository();
-// Phase 8 stand-ins — see modules/pos's application/{stock-reservation,payment-capture}-port.ts.
-// Replaced with real Phase 9/10 implementations without this route changing.
-const stockReservationPort = new NoopStockReservationPort();
-const paymentCapturePort = new AlwaysSucceedsPaymentCapturePort();
+// Phase 9 wired the real inventory-backed reservation port; Phase 10 wires
+// the real payments-backed capture port — see modules/pos's application/
+// {stock-reservation,payment-capture}-port.ts.
+const stockReservationPort = new InventoryStockReservationPort();
+const paymentCapturePort = new PaymentsCapturePort();
 const logger = createLogger({ bindings: { module: "pos", operation: "checkout-route" } });
 
 const checkoutSchema = z.object({
   idempotencyKey: z.string().min(1),
   paymentMethod: z.string().min(1),
+  paymentMethodToken: z.string().optional(),
   taxCents: z.number().int().nonnegative().optional(),
 });
 
@@ -59,6 +63,13 @@ export const POST = withPermission<{ cartId: string }>(
       }
       if (error instanceof PaymentCaptureFailedError) {
         return NextResponse.json({ code: "PAYMENT_FAILED", message: error.message, requestId }, { status: 402 });
+      }
+      if (error instanceof InsufficientStockError) {
+        // CLAUDE.md §31 uses this exact code as its worked example.
+        return NextResponse.json({ code: "INVENTORY_INSUFFICIENT_STOCK", message: error.message, requestId }, { status: 422 });
+      }
+      if (error instanceof UnsupportedPaymentMethodError) {
+        return NextResponse.json({ code: "UNSUPPORTED_PAYMENT_METHOD", message: error.message, requestId }, { status: 400 });
       }
 
       logger.error("checkout failed unexpectedly", {
