@@ -19,6 +19,8 @@ import {
   seedDefaultRoles,
 } from "@erp/identity";
 import { coreManifest, DrizzleModuleRegistryRepository, installModule } from "@erp/core";
+import { inventoryManifest } from "@erp/inventory";
+import { paymentsManifest } from "@erp/payments";
 import { posManifest } from "@erp/pos";
 import { ModuleRegistry } from "@erp/module-registry";
 
@@ -59,20 +61,26 @@ describe.skipIf(!hasDatabases)("POS flow (integration)", () => {
     const tenant = await createTenant(tenantRepo, { slug, name: "POS Flow Test Tenant" });
     await provisionTenantDatabase(tenant);
 
-    // pos depends on core/tenant/identity (its manifest) — they must be
-    // installed through the registry first, exactly like a real tenant
-    // onboarding would (see apps/web/scripts/bootstrap-tenant.ts), not
-    // just have their migrations applied directly.
+    // pos depends on core/tenant/identity/inventory/payments (its
+    // manifest) — they must be installed through the registry first,
+    // exactly like a real tenant onboarding would (see
+    // apps/web/scripts/bootstrap-tenant.ts), not just have their
+    // migrations applied directly. pos itself is installed via the real
+    // HTTP route below, not here — that's this test's actual proof.
     const registry = new ModuleRegistry();
     registry.register(coreManifest);
     registry.register(tenantManifest);
     registry.register(identityManifest);
+    registry.register(inventoryManifest);
+    registry.register(paymentsManifest);
     registry.register(posManifest);
     registry.validateGraph();
     const moduleRepository = new DrizzleModuleRegistryRepository();
     await installModule(registry, moduleRepository, tenant.id, "core", null);
     await installModule(registry, moduleRepository, tenant.id, "tenant", null);
     await installModule(registry, moduleRepository, tenant.id, "identity", null);
+    await installModule(registry, moduleRepository, tenant.id, "inventory", null);
+    await installModule(registry, moduleRepository, tenant.id, "payments", null);
 
     const db = await getTenantDb(tenant.id);
     const { owner, member } = await seedDefaultRoles(new DrizzleRoleRepository(), db);
@@ -121,6 +129,14 @@ describe.skipIf(!hasDatabases)("POS flow (integration)", () => {
     const cartResponse = await createCartRoute(jsonRequestFor(host, "/api/pos/carts", token, { terminalId: terminal.id }));
     expect(cartResponse.status).toBe(201);
     const cart = await cartResponse.json();
+
+    // Inventory now genuinely enforces "never oversell" (Phase 9) — stock
+    // must actually be received before checkout can reserve it.
+    const { POST: receiveStockRoute } = await import("../src/app/api/inventory/stock/receive/route");
+    const receiveResponse = await receiveStockRoute(
+      jsonRequestFor(host, "/api/inventory/stock/receive", token, { sku: "SKU-1", quantity: 10 }),
+    );
+    expect(receiveResponse.status).toBe(201);
 
     const { POST: addLine } = await import("../src/app/api/pos/carts/[cartId]/lines/route");
     const lineResponse = await addLine(
@@ -172,5 +188,45 @@ describe.skipIf(!hasDatabases)("POS flow (integration)", () => {
     expect(response.status).toBe(422);
     const body = await response.json();
     expect(body.code).toBe("CART_EMPTY");
+  });
+
+  it("rejects checkout that would oversell with 422 INVENTORY_INSUFFICIENT_STOCK, leaving stock untouched", async () => {
+    const token = await loginAs("owner@pos-flow.example", ownerPassword);
+
+    const { POST: createTerminal } = await import("../src/app/api/pos/terminals/route");
+    const terminalResponse = await createTerminal(jsonRequestFor(host, "/api/pos/terminals", token, { name: "Oversell Kiosk" }));
+    const terminal = await terminalResponse.json();
+
+    const { POST: createCartRoute } = await import("../src/app/api/pos/carts/route");
+    const cartResponse = await createCartRoute(jsonRequestFor(host, "/api/pos/carts", token, { terminalId: terminal.id }));
+    const cart = await cartResponse.json();
+
+    // SKU-OVERSELL has never been received — zero stock available.
+    const { POST: addLine } = await import("../src/app/api/pos/carts/[cartId]/lines/route");
+    await addLine(
+      jsonRequestFor(host, `/api/pos/carts/${cart.id}/lines`, token, { sku: "SKU-OVERSELL", name: "Ghost", quantity: 1, unitPriceCents: 100 }),
+      { params: Promise.resolve({ cartId: cart.id }) },
+    );
+
+    const { POST: checkoutRoute } = await import("../src/app/api/pos/carts/[cartId]/checkout/route");
+    const response = await checkoutRoute(
+      jsonRequestFor(host, `/api/pos/carts/${cart.id}/checkout`, token, {
+        idempotencyKey: "POS-TERM-001-20260819-000003",
+        paymentMethod: "cash",
+      }),
+      { params: Promise.resolve({ cartId: cart.id }) },
+    );
+    expect(response.status).toBe(422);
+    const body = await response.json();
+    expect(body.code).toBe("INVENTORY_INSUFFICIENT_STOCK");
+
+    const { GET: getStock } = await import("../src/app/api/inventory/stock/route");
+    const stockResponse = await getStock(
+      new NextRequest(`http://${host}/api/inventory/stock?sku=SKU-OVERSELL`, {
+        headers: new Headers({ host, "x-tenant-host-hint": host, cookie: `erp_session=${token}` }),
+      }),
+    );
+    const level = await stockResponse.json();
+    expect(level).toMatchObject({ onHand: 0, reserved: 0 }); // never left with a dangling reservation
   });
 });
