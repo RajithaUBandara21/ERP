@@ -16,6 +16,7 @@
   "dependencies": {
     "@erp/auth": "workspace:*",
     "@erp/authorization": "workspace:*",
+    "@erp/billing": "workspace:*",
     "@erp/configuration": "workspace:*",
     "@erp/core": "workspace:*",
     "@erp/database": "workspace:*",

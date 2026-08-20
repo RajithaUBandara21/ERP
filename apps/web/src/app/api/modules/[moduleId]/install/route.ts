@@ -1,3 +1,4 @@
+import { DrizzlePlanRepository, DrizzleSubscriptionRepository, SubscriptionEntitlementChecker } from "@erp/billing";
 import { CORE_PERMISSIONS, DrizzleModuleRegistryRepository, installModule } from "@erp/core";
 import { createLogger } from "@erp/logging";
 import { NextResponse } from "next/server";
@@ -6,6 +7,7 @@ import { moduleErrorResponse } from "@/lib/module-error-response";
 import { withPermission } from "@/lib/with-permission";
 
 const repository = new DrizzleModuleRegistryRepository();
+const entitlementChecker = new SubscriptionEntitlementChecker(new DrizzleSubscriptionRepository(), new DrizzlePlanRepository());
 const logger = createLogger({ bindings: { module: "core", operation: "install-module-route" } });
 
 export const POST = withPermission<{ moduleId: string }>(
@@ -15,7 +17,7 @@ export const POST = withPermission<{ moduleId: string }>(
     const { moduleId } = params;
 
     try {
-      await installModule(getModuleRegistry(), repository, tenant.id, moduleId, session.userId);
+      await installModule(getModuleRegistry(), repository, tenant.id, moduleId, session.userId, entitlementChecker);
       return NextResponse.json({ moduleId, status: "active" });
     } catch (error) {
       const mapped = moduleErrorResponse(error, requestId);

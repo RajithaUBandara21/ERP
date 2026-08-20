@@ -3,6 +3,7 @@ import {
   IncompatibleDependencyVersionError,
   ModuleAlreadyInstalledError,
   ModuleHasDependentsError,
+  ModuleNotEntitledError,
   ModuleNotInstalledError,
 } from "@erp/core";
 import { ModuleNotRegisteredError } from "@erp/module-registry";
@@ -24,6 +25,9 @@ export function moduleErrorResponse(error: unknown, requestId: string): NextResp
   }
   if (error instanceof ModuleHasDependentsError) {
     return NextResponse.json({ code: "MODULE_HAS_DEPENDENTS", message: error.message, requestId }, { status: 409 });
+  }
+  if (error instanceof ModuleNotEntitledError) {
+    return NextResponse.json({ code: "MODULE_NOT_ENTITLED", message: error.message, requestId }, { status: 402 });
   }
   return undefined;
 }

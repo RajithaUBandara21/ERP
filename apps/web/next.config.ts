@@ -6,6 +6,7 @@ const nextConfig: NextConfig = {
   // and packages/*/package.json "main". Next must compile them itself.
   transpilePackages: [
     "@erp/database",
+    "@erp/billing",
     "@erp/logging",
     "@erp/configuration",
     "@erp/validation",

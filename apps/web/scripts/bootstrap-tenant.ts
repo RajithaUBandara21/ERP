@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
- * Ops/demo script: provisions a tenant, installs core/tenant/identity
- * through the module registry (which applies identity's tenant-DB
+ * Ops/demo script: provisions a tenant, installs core/tenant/identity/
+ * billing through the module registry (which applies identity's tenant-DB
  * migrations as part of installation — see ModuleManifest.applyMigrations),
+ * subscribes the tenant to the "starter" plan (Phase 15 — CLAUDE.md §48),
  * and registers a demo user. See apply-migrations.ts's doc comment for why
  * this must stay a standalone script, not a Route Handler.
  */
@@ -16,6 +17,13 @@ import {
   seedDefaultRoles,
 } from "@erp/identity";
 import { coreManifest, DrizzleModuleRegistryRepository, installModule } from "@erp/core";
+import {
+  billingManifest,
+  createSubscription,
+  DrizzlePlanRepository,
+  DrizzleSubscriptionRepository,
+  seedDefaultPlans,
+} from "@erp/billing";
 import { ModuleRegistry } from "@erp/module-registry";
 import { createLogger } from "@erp/logging";
 
@@ -51,14 +59,21 @@ async function main(): Promise<void> {
     moduleRegistry.register(coreManifest);
     moduleRegistry.register(tenantManifest);
     moduleRegistry.register(identityManifest);
+    moduleRegistry.register(billingManifest);
     moduleRegistry.validateGraph();
 
     const moduleRepository = new DrizzleModuleRegistryRepository();
-    // core first (everything depends on it), then tenant/identity — their
-    // relative order doesn't matter, neither depends on the other.
+    // core first (everything depends on it), then tenant/identity/billing — their
+    // relative order doesn't matter, none of them depend on each other.
     await installModule(moduleRegistry, moduleRepository, tenant.id, "core", null);
     await installModule(moduleRegistry, moduleRepository, tenant.id, "tenant", null);
     await installModule(moduleRegistry, moduleRepository, tenant.id, "identity", null); // applies identity's tenant-DB migrations
+    await installModule(moduleRegistry, moduleRepository, tenant.id, "billing", null);
+
+    const planRepository = new DrizzlePlanRepository();
+    const subscriptionRepository = new DrizzleSubscriptionRepository();
+    await seedDefaultPlans(planRepository); // idempotent — plans are global, not tenant-scoped
+    await createSubscription({ planRepository, subscriptionRepository }, { tenantId: tenant.id, planCode: "starter" });
 
     const tenantDb = await getTenantDb(tenant.id);
     const { owner } = await seedDefaultRoles(new DrizzleRoleRepository(), tenantDb);
