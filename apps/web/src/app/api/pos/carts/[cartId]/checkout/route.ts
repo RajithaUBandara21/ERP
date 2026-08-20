@@ -12,6 +12,7 @@ import {
 } from "@erp/pos";
 import { InsufficientStockError } from "@erp/inventory";
 import { UnsupportedPaymentMethodError } from "@erp/payments";
+import { DrizzleOutboxRepository } from "@erp/events";
 import { createLogger } from "@erp/logging";
 import { stripUndefined, z } from "@erp/validation";
 import { NextResponse } from "next/server";
@@ -21,9 +22,12 @@ const cartRepository = new DrizzleCartRepository();
 const transactionRepository = new DrizzlePosTransactionRepository();
 // Phase 9 wired the real inventory-backed reservation port; Phase 10 wires
 // the real payments-backed capture port — see modules/pos's application/
-// {stock-reservation,payment-capture}-port.ts.
+// {stock-reservation,payment-capture}-port.ts. Phase 13 adds the real
+// outbox repository — checkout() writes OrderPaid in the same
+// transaction as the sale (ADR-0004).
 const stockReservationPort = new InventoryStockReservationPort();
 const paymentCapturePort = new PaymentsCapturePort();
+const outboxRepository = new DrizzleOutboxRepository();
 const logger = createLogger({ bindings: { module: "pos", operation: "checkout-route" } });
 
 const checkoutSchema = z.object({
@@ -45,7 +49,7 @@ export const POST = withPermission<{ cartId: string }>(
 
     try {
       const transaction = await checkout(
-        { cartRepository, transactionRepository, stockReservationPort, paymentCapturePort },
+        { cartRepository, transactionRepository, stockReservationPort, paymentCapturePort, outboxRepository },
         tenantDb,
         tenant.id,
         { cartId: params.cartId, ...stripUndefined(parsed.data) },

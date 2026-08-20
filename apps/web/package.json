@@ -20,6 +20,7 @@
     "@erp/core": "workspace:*",
     "@erp/database": "workspace:*",
     "@erp/delivery": "workspace:*",
+    "@erp/events": "workspace:*",
     "@erp/identity": "workspace:*",
     "@erp/inventory": "workspace:*",
     "@erp/logging": "workspace:*",
