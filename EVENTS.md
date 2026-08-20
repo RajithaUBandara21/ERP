@@ -1,6 +1,6 @@
 # Events
 
-Status: Phase 1 (architecture only). Implementation begins Phase 13. See [ADR-0004](./docs/adr/0004-outbox-pattern.md).
+Status: Implemented, Phase 13 (see [ADR-0004](./docs/adr/0004-outbox-pattern.md)'s Update for exactly what shipped, and [packages/events/README.md](./packages/events/README.md) for usage).
 
 ## 1. Why events
 

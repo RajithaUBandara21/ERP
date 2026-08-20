@@ -2,7 +2,7 @@
 
 A production-grade, multi-tenant ERP SaaS platform built as a modular monolith with future service-extraction capability.
 
-This repository has completed **Phase 12 (Offline POS)**, "true foundation" scope: `apps/pos`, a new Next.js app and this project's first real UI, implements a durable IndexedDB-backed local cart and sync queue (`idb`), proving the full offline-write → reconnect → idempotent-sync path for one golden flow, reusing `pos`'s existing checkout API rather than a parallel code path. `apps/pos` proxies its API calls to `apps/web` same-origin (not CORS, since the session cookie's `SameSite=Lax` wouldn't survive a genuinely cross-origin fetch) — live cross-app verification (curl against both apps' running dev servers) caught a real bug: `apps/web`'s own `proxy.ts` was unconditionally overwriting the tenant host hint from its own Host header, breaking every proxied request; fixed without weakening the documented trust model (see [ADR-0005](./docs/adr/0005-nextjs-app-shell.md)'s Update). See [OFFLINE-POS.md](./OFFLINE-POS.md), [ADR-0003](./docs/adr/0003-offline-pos.md)'s Update, and [apps/pos/README.md](./apps/pos/README.md) for exactly what shipped vs. what's still open (no browser-automation tool was available to visually verify the React UI itself — flagged explicitly, not glossed over). See [CLAUDE.md](./CLAUDE.md) for the full governing specification and [docs/adr/](./docs/adr/) for the architecture decisions made so far.
+This repository has completed **Phase 13 (Events/Outbox)**: `packages/events` implements the transactional outbox pattern (ADR-0004) — an event and its business write commit in the exact same database transaction, genuinely verified against real Postgres (an event written inside a transaction that's then rolled back never appears in the outbox). `modules/pos`'s checkout now writes an `OrderPaid` event alongside the sale; `modules/delivery` consumes it to idempotently create a pending delivery — [EVENTS.md](./EVENTS.md) §6's worked example, implemented and live-verified end to end (checkout → confirmed no delivery exists yet → publish → confirmed exactly one pending delivery → publish again → confirmed still exactly one). No background job scheduler exists yet, so the publisher is triggered via a permission-gated `POST /api/events/publish` in the meantime. See [EVENTS.md](./EVENTS.md), [ADR-0004](./docs/adr/0004-outbox-pattern.md)'s Update, and [packages/events/README.md](./packages/events/README.md). See [CLAUDE.md](./CLAUDE.md) for the full governing specification and [docs/adr/](./docs/adr/) for the architecture decisions made so far.
 
 ## Start here
 
@@ -73,7 +73,7 @@ curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/identity
 curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/modules
 ```
 
-See the roadmap in [ARCHITECTURE.md](./ARCHITECTURE.md#9-implementation-roadmap) for what's next (Phase 13, Events/Outbox).
+See the roadmap in [ARCHITECTURE.md](./ARCHITECTURE.md#9-implementation-roadmap) for what's next (Phase 14, Reporting).
 
 ## Development principles
 
