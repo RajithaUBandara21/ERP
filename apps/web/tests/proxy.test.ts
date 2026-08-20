@@ -28,4 +28,14 @@ describe("proxy", () => {
       "acme.platform.example.com",
     );
   });
+
+  it("preserves an already-present hint instead of overwriting it from Host (apps/pos's same-origin rewrite relies on this)", () => {
+    const request = new NextRequest("http://localhost:3000/api/pos/terminals", {
+      headers: { host: "localhost:3000", [TENANT_HOST_HINT_HEADER]: "acme.platform.example.com" },
+    });
+
+    const response = proxy(request);
+
+    expect(response.headers.get(`x-middleware-request-${TENANT_HOST_HINT_HEADER}`)).toBe("acme.platform.example.com");
+  });
 });
