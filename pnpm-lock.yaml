@@ -44,15 +44,24 @@ importers:
       '@erp/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@erp/delivery':
+        specifier: workspace:*
+        version: link:../../modules/delivery
       '@erp/identity':
         specifier: workspace:*
         version: link:../../modules/identity
+      '@erp/inventory':
+        specifier: workspace:*
+        version: link:../../modules/inventory
       '@erp/logging':
         specifier: workspace:*
         version: link:../../packages/logging
       '@erp/module-registry':
         specifier: workspace:*
         version: link:../../packages/module-registry
+      '@erp/payments':
+        specifier: workspace:*
+        version: link:../../modules/payments
       '@erp/pos':
         specifier: workspace:*
         version: link:../../modules/pos
@@ -128,6 +137,46 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(tsx@4.23.12))
 
+  modules/delivery:
+    dependencies:
+      '@erp/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@erp/module-registry':
+        specifier: workspace:*
+        version: link:../../packages/module-registry
+      '@erp/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+    devDependencies:
+      '@erp/core':
+        specifier: workspace:*
+        version: link:../core
+      '@erp/identity':
+        specifier: workspace:*
+        version: link:../identity
+      '@erp/tenant':
+        specifier: workspace:*
+        version: link:../tenant
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      drizzle-kit:
+        specifier: ^0.31.10
+        version: 0.31.10
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(tsx@4.23.12))
+
   modules/identity:
     dependencies:
       '@erp/auth':
@@ -168,7 +217,7 @@ importers:
         specifier: ^4.1.11
         version: 4.1.11(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(tsx@4.23.12))
 
-  modules/pos:
+  modules/inventory:
     dependencies:
       '@erp/database':
         specifier: workspace:*
@@ -176,6 +225,92 @@ importers:
       '@erp/module-registry':
         specifier: workspace:*
         version: link:../../packages/module-registry
+      '@erp/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+    devDependencies:
+      '@erp/core':
+        specifier: workspace:*
+        version: link:../core
+      '@erp/identity':
+        specifier: workspace:*
+        version: link:../identity
+      '@erp/tenant':
+        specifier: workspace:*
+        version: link:../tenant
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      drizzle-kit:
+        specifier: ^0.31.10
+        version: 0.31.10
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(tsx@4.23.12))
+
+  modules/payments:
+    dependencies:
+      '@erp/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@erp/module-registry':
+        specifier: workspace:*
+        version: link:../../packages/module-registry
+      '@erp/validation':
+        specifier: workspace:*
+        version: link:../../packages/validation
+      drizzle-orm:
+        specifier: ^0.45.2
+        version: 0.45.2(postgres@3.4.9)
+    devDependencies:
+      '@erp/core':
+        specifier: workspace:*
+        version: link:../core
+      '@erp/identity':
+        specifier: workspace:*
+        version: link:../identity
+      '@erp/tenant':
+        specifier: workspace:*
+        version: link:../tenant
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+      drizzle-kit:
+        specifier: ^0.31.10
+        version: 0.31.10
+      postgres:
+        specifier: ^3.4.9
+        version: 3.4.9
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.11
+        version: 4.1.11(@types/node@26.2.0)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.2)(tsx@4.23.12))
+
+  modules/pos:
+    dependencies:
+      '@erp/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@erp/inventory':
+        specifier: workspace:*
+        version: link:../inventory
+      '@erp/module-registry':
+        specifier: workspace:*
+        version: link:../../packages/module-registry
+      '@erp/payments':
+        specifier: workspace:*
+        version: link:../payments
       '@erp/validation':
         specifier: workspace:*
         version: link:../../packages/validation
