@@ -8,6 +8,7 @@
 import postgres from "postgres";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { closeControlPlaneDb, getTenantDb } from "@erp/database";
+import { DrizzleOutboxRepository, DOMAIN_EVENT_TYPES } from "@erp/events";
 import { createTenant, DrizzleTenantRepository, provisionTenantDatabase, tenantManifest } from "@erp/tenant";
 import { identityManifest } from "@erp/identity";
 import { inventoryManifest } from "@erp/inventory";
@@ -74,12 +75,14 @@ describe.skipIf(!hasDatabases)("pos lifecycle (integration)", () => {
     const updatedCart = await addCartLine(cartRepository, db, cart.id, { sku: "SKU-1", name: "Widget", quantity: 3, unitPriceCents: 250 });
     expect(updatedCart.lines).toHaveLength(1);
 
+    const outboxRepository = new DrizzleOutboxRepository();
     const transaction = await checkout(
       {
         cartRepository,
         transactionRepository,
         stockReservationPort: new NoopStockReservationPort(),
         paymentCapturePort: new AlwaysSucceedsPaymentCapturePort(),
+        outboxRepository,
       },
       db,
       tenantId,
@@ -91,6 +94,11 @@ describe.skipIf(!hasDatabases)("pos lifecycle (integration)", () => {
 
     const closedCart = await cartRepository.findById(db, cart.id);
     expect(closedCart?.status).toBe("completed");
+
+    // The outbox write really landed in the same transaction as the business writes — see checkout.ts's doc comment.
+    const pending = await outboxRepository.findPending(db, 10);
+    const orderPaid = pending.find((event) => event.aggregateId === transaction.id);
+    expect(orderPaid?.eventType).toBe(DOMAIN_EVENT_TYPES.ORDER_PAID);
   });
 
   it("retrying checkout with the same idempotency key against real Postgres returns the original row, never a duplicate", async () => {
@@ -109,6 +117,7 @@ describe.skipIf(!hasDatabases)("pos lifecycle (integration)", () => {
       transactionRepository,
       stockReservationPort: new NoopStockReservationPort(),
       paymentCapturePort: new AlwaysSucceedsPaymentCapturePort(),
+      outboxRepository: new DrizzleOutboxRepository(),
     };
 
     const first = await checkout(deps, db, tenantId, { cartId: cart.id, idempotencyKey: key, paymentMethod: "card" });

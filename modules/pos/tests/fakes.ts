@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { TenantDb } from "@erp/database";
+import type { DomainEvent, NewDomainEvent, OutboxRepository, PendingEvent } from "@erp/events";
 import type { Cart, CartStatus } from "../src/domain/cart";
 import type { CartLine } from "../src/domain/cart-line";
 import type { PosTransaction } from "../src/domain/pos-transaction";
@@ -10,7 +11,46 @@ import type { TerminalRepository } from "../src/application/terminal-repository"
 import type { PaymentCaptureResult, PaymentCapturePort } from "../src/application/payment-capture-port";
 import type { StockReservationPort } from "../src/application/stock-reservation-port";
 
-export const fakeDb = {} as TenantDb;
+/**
+ * checkout() runs its final writes inside `db.transaction(async (tx) => ...)`
+ * — the fakes don't model real transactional isolation, so `transaction`
+ * just invokes the callback with `fakeDb` itself as `tx`, letting the same
+ * in-memory repositories record the writes either way.
+ */
+export const fakeDb = {
+  transaction: async <T>(callback: (tx: TenantDb) => Promise<T>): Promise<T> => callback(fakeDb),
+} as unknown as TenantDb;
+
+export class FakeOutboxRepository implements OutboxRepository {
+  public events: DomainEvent[] = [];
+
+  async insert(_db: TenantDb, event: NewDomainEvent): Promise<DomainEvent> {
+    const stored: DomainEvent = { eventId: randomUUID(), createdAt: new Date(), version: event.version ?? 1, ...event };
+    this.events.push(stored);
+    return stored;
+  }
+
+  async findPending(): Promise<PendingEvent[]> {
+    return this.events.map((event) => ({ ...event, attempts: 0 }));
+  }
+
+  async hasBeenDelivered(): Promise<boolean> {
+    return false;
+  }
+
+  async markConsumerDelivered(): Promise<void> {}
+  async markFullyDelivered(): Promise<void> {}
+
+  async recordFailedAttempt(): Promise<{ attempts: number }> {
+    return { attempts: 1 };
+  }
+
+  async markDeadLettered(): Promise<void> {}
+
+  async findDeadLettered(): Promise<PendingEvent[]> {
+    return [];
+  }
+}
 
 export class FakeTerminalRepository implements TerminalRepository {
   private readonly byId = new Map<string, Terminal>();

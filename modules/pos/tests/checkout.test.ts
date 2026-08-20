@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DOMAIN_EVENT_TYPES } from "@erp/events";
 import { checkout, PaymentCaptureFailedError } from "../src/application/checkout";
 import { CartNotOpenError, EmptyCartError } from "../src/domain/cart";
 import {
   fakeDb,
   FakeCartRepository,
+  FakeOutboxRepository,
   FakePaymentCapturePort,
   FakePosTransactionRepository,
   FakeStockReservationPort,
@@ -16,7 +18,8 @@ function deps() {
   const transactionRepository = new FakePosTransactionRepository();
   const stockReservationPort = new FakeStockReservationPort();
   const paymentCapturePort = new FakePaymentCapturePort();
-  return { cartRepository, transactionRepository, stockReservationPort, paymentCapturePort };
+  const outboxRepository = new FakeOutboxRepository();
+  return { cartRepository, transactionRepository, stockReservationPort, paymentCapturePort, outboxRepository };
 }
 
 describe("checkout", () => {
@@ -47,6 +50,14 @@ describe("checkout", () => {
 
     const closedCart = await d.cartRepository.findById(fakeDb, cart.id);
     expect(closedCart?.status).toBe("completed");
+
+    // Same-transaction outbox write (ADR-0004) — see checkout.ts's doc comment.
+    expect(d.outboxRepository.events).toHaveLength(1);
+    expect(d.outboxRepository.events[0]).toMatchObject({
+      eventType: DOMAIN_EVENT_TYPES.ORDER_PAID,
+      aggregateId: transaction.id,
+      payload: { transactionId: transaction.id, totalCents: 1000, paymentMethod: "cash" },
+    });
   });
 
   it("adds tax on top of the subtotal when provided", async () => {
@@ -135,6 +146,7 @@ describe("checkout", () => {
     const transactionRepository = new FakePosTransactionRepository();
     const stockReservationPort = new FakeStockReservationPort();
     const paymentCapturePort = new FakePaymentCapturePort({ success: false });
+    const outboxRepository = new FakeOutboxRepository();
     const cart = cartRepository.seed({
       terminalId: "terminal-1",
       customerId: null,
@@ -144,7 +156,7 @@ describe("checkout", () => {
 
     await expect(
       checkout(
-        { cartRepository, transactionRepository, stockReservationPort, paymentCapturePort },
+        { cartRepository, transactionRepository, stockReservationPort, paymentCapturePort, outboxRepository },
         fakeDb,
         "tenant-1",
         { cartId: cart.id, idempotencyKey: VALID_KEY, paymentMethod: "card" },
@@ -161,5 +173,8 @@ describe("checkout", () => {
     expect(stockReservationPort.releaseCalls).toHaveLength(1);
     expect(stockReservationPort.confirmCalls).toHaveLength(0);
     expect(stockReservationPort.releaseCalls[0]?.reference).toBe(cart.id);
+
+    // No sale, no event — nothing was ever paid for.
+    expect(outboxRepository.events).toHaveLength(0);
   });
 });
