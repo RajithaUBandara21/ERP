@@ -31,6 +31,16 @@ export class IncompatibleDependencyVersionError extends Error {
   }
 }
 
+export class ModuleNotEntitledError extends Error {
+  constructor(
+    public readonly moduleId: string,
+    public readonly tenantId: string,
+  ) {
+    super(`Cannot install '${moduleId}': tenant's current subscription plan does not include this module`);
+    this.name = "ModuleNotEntitledError";
+  }
+}
+
 export class ModuleHasDependentsError extends Error {
   constructor(
     public readonly moduleId: string,

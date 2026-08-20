@@ -8,11 +8,15 @@ export {
   IncompatibleDependencyVersionError,
   ModuleAlreadyInstalledError,
   ModuleHasDependentsError,
+  ModuleNotEntitledError,
   ModuleNotInstalledError,
 } from "./domain/errors";
 
 export type { ModuleInstallationRecord, ModuleRegistryRepository } from "./application/module-registry-repository";
 export { DrizzleModuleRegistryRepository } from "./infrastructure/drizzle-module-registry-repository";
+
+export type { EntitlementChecker } from "./application/entitlement-checker";
+export { AllowAllEntitlementChecker } from "./infrastructure/allow-all-entitlement-checker";
 
 export { installModule } from "./application/install-module";
 export { uninstallModule } from "./application/uninstall-module";

@@ -1,6 +1,13 @@
 import { recordAuditEvent } from "@erp/logging";
 import { satisfiesVersionRange, type ModuleRegistry } from "@erp/module-registry";
-import { DependencyNotInstalledError, IncompatibleDependencyVersionError, ModuleAlreadyInstalledError } from "../domain/errors";
+import {
+  DependencyNotInstalledError,
+  IncompatibleDependencyVersionError,
+  ModuleAlreadyInstalledError,
+  ModuleNotEntitledError,
+} from "../domain/errors";
+import { AllowAllEntitlementChecker } from "../infrastructure/allow-all-entitlement-checker";
+import type { EntitlementChecker } from "./entitlement-checker";
 import type { ModuleRegistryRepository } from "./module-registry-repository";
 
 /**
@@ -13,6 +20,11 @@ import type { ModuleRegistryRepository } from "./module-registry-repository";
  * function, not silently skipped, so the sequence stays honest about what
  * this codebase does and doesn't do yet. Step 3 (migrations) IS wired, as
  * of Phase 7 — see ModuleManifest.applyMigrations's doc comment.
+ *
+ * entitlementChecker defaults to AllowAllEntitlementChecker so every
+ * existing caller (scripts, tests, other modules) keeps working unchanged;
+ * only apps/web's real install route wires modules/billing's
+ * SubscriptionEntitlementChecker (Phase 15 — CLAUDE.md §48).
  */
 export async function installModule(
   registry: ModuleRegistry,
@@ -20,12 +32,17 @@ export async function installModule(
   tenantId: string,
   moduleId: string,
   actor: string | null,
+  entitlementChecker: EntitlementChecker = new AllowAllEntitlementChecker(),
 ): Promise<void> {
   const manifest = registry.get(moduleId); // throws ModuleNotRegisteredError if unknown to the registry
 
   const existing = await repository.findInstalled(tenantId, moduleId);
   if (existing?.status === "active") {
     throw new ModuleAlreadyInstalledError(moduleId);
+  }
+
+  if (!(await entitlementChecker.isModuleIncluded(tenantId, moduleId))) {
+    throw new ModuleNotEntitledError(moduleId, tenantId);
   }
 
   // 1-2. Validate dependencies + compatibility, against THIS TENANT's installed state.

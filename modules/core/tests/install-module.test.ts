@@ -5,7 +5,9 @@ import {
   DependencyNotInstalledError,
   IncompatibleDependencyVersionError,
   ModuleAlreadyInstalledError,
+  ModuleNotEntitledError,
 } from "../src/domain/errors";
+import type { EntitlementChecker } from "../src/application/entitlement-checker";
 import { FakeModuleRegistryRepository } from "./fakes";
 
 function manifest(
@@ -133,5 +135,39 @@ describe("installModule", () => {
     const repository = new FakeModuleRegistryRepository();
 
     await expect(installModule(registry, repository, "tenant-1", "core", "user-1")).resolves.not.toThrow();
+  });
+
+  it("defaults to allowing installation when no entitlementChecker is passed — every existing caller keeps working unchanged", async () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest("core"));
+    const repository = new FakeModuleRegistryRepository();
+
+    await expect(installModule(registry, repository, "tenant-1", "core", "user-1")).resolves.not.toThrow();
+  });
+
+  it("rejects installation when an injected entitlementChecker denies the module (Phase 15)", async () => {
+    const registry = new ModuleRegistry();
+    registry.register(manifest("core"));
+    const repository = new FakeModuleRegistryRepository();
+    const denyAll: EntitlementChecker = { isModuleIncluded: async () => false };
+
+    await expect(installModule(registry, repository, "tenant-1", "core", "user-1", denyAll)).rejects.toThrow(
+      ModuleNotEntitledError,
+    );
+  });
+
+  it("never checks dependencies or runs migrations once entitlement is denied", async () => {
+    const applyMigrations = vi.fn().mockResolvedValue(undefined);
+    const registry = new ModuleRegistry();
+    registry.register(manifest("core"));
+    registry.register(manifest("identity", [{ moduleId: "core", versionRange: "*" }], applyMigrations));
+    const repository = new FakeModuleRegistryRepository();
+    await installModule(registry, repository, "tenant-1", "core", "user-1");
+    const denyAll: EntitlementChecker = { isModuleIncluded: async () => false };
+
+    await expect(installModule(registry, repository, "tenant-1", "identity", "user-1", denyAll)).rejects.toThrow(
+      ModuleNotEntitledError,
+    );
+    expect(applyMigrations).not.toHaveBeenCalled();
   });
 });
