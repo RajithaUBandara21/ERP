@@ -22,6 +22,7 @@ import { coreManifest, DrizzleModuleRegistryRepository, installModule } from "@e
 import { inventoryManifest } from "@erp/inventory";
 import { paymentsManifest } from "@erp/payments";
 import { posManifest } from "@erp/pos";
+import { createSubscription, DrizzlePlanRepository, DrizzleSubscriptionRepository, seedDefaultPlans } from "@erp/billing";
 import { ModuleRegistry } from "@erp/module-registry";
 
 const hasDatabases = Boolean(process.env.CONTROL_PLANE_DATABASE_URL && process.env.TENANT_DATABASE_ADMIN_URL);
@@ -81,6 +82,14 @@ describe.skipIf(!hasDatabases)("POS flow (integration)", () => {
     await installModule(registry, moduleRepository, tenant.id, "identity", null);
     await installModule(registry, moduleRepository, tenant.id, "inventory", null);
     await installModule(registry, moduleRepository, tenant.id, "payments", null);
+
+    // pos itself installs through the real HTTP route below, which now
+    // entitlement-gates installation (Phase 15) — a real tenant always has
+    // a subscription by this point (see apps/web/scripts/bootstrap-tenant.ts).
+    const planRepository = new DrizzlePlanRepository();
+    const subscriptionRepository = new DrizzleSubscriptionRepository();
+    await seedDefaultPlans(planRepository);
+    await createSubscription({ planRepository, subscriptionRepository }, { tenantId: tenant.id, planCode: "starter" });
 
     const db = await getTenantDb(tenant.id);
     const { owner, member } = await seedDefaultRoles(new DrizzleRoleRepository(), db);

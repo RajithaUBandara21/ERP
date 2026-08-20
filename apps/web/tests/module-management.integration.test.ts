@@ -18,6 +18,7 @@ import {
   registerUser,
   seedDefaultRoles,
 } from "@erp/identity";
+import { createSubscription, DrizzlePlanRepository, DrizzleSubscriptionRepository, seedDefaultPlans } from "@erp/billing";
 
 const hasDatabases = Boolean(process.env.CONTROL_PLANE_DATABASE_URL && process.env.TENANT_DATABASE_ADMIN_URL);
 
@@ -51,6 +52,17 @@ describe.skipIf(!hasDatabases)("module management (integration)", () => {
     const tenant = await createTenant(tenantRepo, { slug, name: "Module Management Test Tenant" });
     await provisionTenantDatabase(tenant);
     await applyIdentityMigrations(tenant.id);
+
+    // A real tenant always has a subscription by the time it reaches the
+    // install HTTP route (see apps/web/scripts/bootstrap-tenant.ts) — the
+    // route now entitlement-gates installation (Phase 15), so this test's
+    // tenant needs one too, even though it only ever installs "core" (the
+    // starter plan includes it, same as every plan — see
+    // modules/billing/src/domain/plan.ts's doc comment).
+    const planRepository = new DrizzlePlanRepository();
+    const subscriptionRepository = new DrizzleSubscriptionRepository();
+    await seedDefaultPlans(planRepository);
+    await createSubscription({ planRepository, subscriptionRepository }, { tenantId: tenant.id, planCode: "starter" });
 
     const db = await getTenantDb(tenant.id);
     const { owner, member } = await seedDefaultRoles(new DrizzleRoleRepository(), db);
