@@ -1,6 +1,6 @@
 # ADR-0005: Next.js App Router as Application Shell, with a Thin Request-Hint Layer
 
-- Status: Accepted (amended during Phase 3 and Phase 8 implementation — see Updates below)
+- Status: Accepted (amended during Phase 3, Phase 8, and Phase 12 implementation — see Updates below)
 - Date: 2026-08-19
 
 ## Context
@@ -49,3 +49,11 @@ const migrationsFolder = path.join(currentDir, "..", "migrations");
 ```
 
 This is verified against a live `next dev` server (fresh restart, curl through `POST /api/modules/{identity,pos}/install`), not just `next build`/tests. It is still a **dev-mode-only fix**: a `next build` production bundle does not automatically copy non-imported files like `*.sql` into its output directory, so this same code would still fail once actually deployed. That gap is not solved here — it's tracked as a known follow-up (proper migration-asset packaging, e.g. embedding migration SQL as generated TS constants, or excluding `apply-migrations.ts` from the Next.js bundle and invoking it out-of-process) for whichever phase first needs a real production deployment (Phase 19, or sooner if it blocks something earlier).
+
+## Update (Phase 12 implementation — a second app, and the hint header's real trust boundary)
+
+Phase 12 added `apps/pos`, this codebase's second Next.js app (see [ADR-0003](./0003-offline-pos.md)'s Update) — the first time two apps needed to talk to each other. `apps/pos` has no database access of its own; it proxies its API calls to apps/web same-origin via a Next.js rewrite (not CORS — see `apps/pos/next.config.ts`'s doc comment: the session cookie is `SameSite=Lax`, which a genuinely cross-origin fetch would never carry, so CORS-with-credentials wouldn't actually authenticate anything without also loosening the cookie's SameSite policy).
+
+This surfaced a real bug, found via live verification against both apps' running dev servers: `proxy.ts` unconditionally overwrote the `x-tenant-host-hint` header with a value derived from *its own* Host header, on every request. That's correct for a real browser hitting apps/web directly, but wrong for a request arriving via apps/pos's rewrite — the Host header on that internal request is apps/web's own dev-server host, not the tenant's, so it silently clobbered the correct hint `apps/pos`'s client had already set, and every proxied request resolved "no tenant for this host."
+
+Fixed by only setting the hint from Host when the request doesn't already carry one (`proxy.ts`). This is not a weakening of the trust model: MULTI-TENANCY.md §6 already documents this header as non-authoritative, pre-auth-only ("only ever used to pick which login/session cookie scope to present — the authoritative tenant_id still comes from the verified session once authenticated"), and the Host header it's normally derived from is exactly as attacker-controllable in a raw request as this header now is once already present — trusting an already-set hint grants no capability a spoofed Host header didn't already grant for this same narrow, non-authorizing purpose.

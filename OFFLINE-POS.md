@@ -1,6 +1,6 @@
 # Offline-First POS
 
-Status: Phase 1 (architecture only). Implementation begins Phase 12 of the roadmap, after online-only POS foundation (Phase 8) exists. See [ADR-0003](./docs/adr/0003-offline-pos.md).
+Status: Implemented, Phase 12 ("true foundation" scope — see [ADR-0003](./docs/adr/0003-offline-pos.md)'s Update for exactly what shipped vs. what's still open, and [apps/pos/README.md](./apps/pos/README.md) for how to run it).
 
 ## 1. Architecture
 

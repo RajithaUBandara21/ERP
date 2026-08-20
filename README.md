@@ -2,7 +2,7 @@
 
 A production-grade, multi-tenant ERP SaaS platform built as a modular monolith with future service-extraction capability.
 
-This repository has completed **Phase 11 (Delivery)**: `modules/delivery` implements `Driver`, `Delivery`, and an append-only `DeliveryAssignment` audit ledger, with a state machine covering first assignment, mid-flight reassignment, a fail → retry → reassign path (CLAUDE.md §34), and completion. No `sales` module exists in this codebase (it isn't one of CLAUDE.md §54's 19 scheduled phases), so `Delivery.orderReference` is an opaque string, not a foreign key — `delivery` depends only on `core`/`tenant`/`identity`. Proven live end-to-end via curl: register drivers → create a delivery → assign → mid-flight reassign → mark failed → reassign (retry) → complete → confirm further reassignment is correctly rejected. See [docs/modules/delivery.md](./docs/modules/delivery.md), and [docs/modules/payments.md](./docs/modules/payments.md)/[docs/modules/inventory.md](./docs/modules/inventory.md) for Phases 9–10 (ledger-backed stock, idempotent payment capture and refund, and the cross-module migration-tracking bug found and fixed in Phase 9). See [CLAUDE.md](./CLAUDE.md) for the full governing specification and [docs/adr/](./docs/adr/) for the architecture decisions made so far.
+This repository has completed **Phase 12 (Offline POS)**, "true foundation" scope: `apps/pos`, a new Next.js app and this project's first real UI, implements a durable IndexedDB-backed local cart and sync queue (`idb`), proving the full offline-write → reconnect → idempotent-sync path for one golden flow, reusing `pos`'s existing checkout API rather than a parallel code path. `apps/pos` proxies its API calls to `apps/web` same-origin (not CORS, since the session cookie's `SameSite=Lax` wouldn't survive a genuinely cross-origin fetch) — live cross-app verification (curl against both apps' running dev servers) caught a real bug: `apps/web`'s own `proxy.ts` was unconditionally overwriting the tenant host hint from its own Host header, breaking every proxied request; fixed without weakening the documented trust model (see [ADR-0005](./docs/adr/0005-nextjs-app-shell.md)'s Update). See [OFFLINE-POS.md](./OFFLINE-POS.md), [ADR-0003](./docs/adr/0003-offline-pos.md)'s Update, and [apps/pos/README.md](./apps/pos/README.md) for exactly what shipped vs. what's still open (no browser-automation tool was available to visually verify the React UI itself — flagged explicitly, not glossed over). See [CLAUDE.md](./CLAUDE.md) for the full governing specification and [docs/adr/](./docs/adr/) for the architecture decisions made so far.
 
 ## Start here
 
@@ -73,7 +73,7 @@ curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/identity
 curl -b cookies.txt -H "Host: acme.localhost" http://localhost:3000/api/modules
 ```
 
-See the roadmap in [ARCHITECTURE.md](./ARCHITECTURE.md#9-implementation-roadmap) for what's next (Phase 12, Offline POS).
+See the roadmap in [ARCHITECTURE.md](./ARCHITECTURE.md#9-implementation-roadmap) for what's next (Phase 13, Events/Outbox).
 
 ## Development principles
 
